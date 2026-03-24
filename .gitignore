@@ -1,0 +1,14 @@
+# Pythonキャッシュ
+__pycache__/
+*.py[cod]
+
+# 環境変数（APIキーを含むため絶対にあげない）
+.env
+
+# データベース本体（重い上にローカル環境に依存するため）
+data/vectordb/
+
+# 仮想環境やログ
+.venv/
+node_modules/
+*.log
