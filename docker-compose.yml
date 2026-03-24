@@ -1,5 +1,5 @@
 services:
-  api:
+  rag_api:
     build:
       context: .
       dockerfile: docker/Dockerfile
@@ -11,3 +11,18 @@ services:
     ports:
       - "8000:8000"
     command: uvicorn app.api.main:app --host 0.0.0.0 --port 8000 --reload
+
+  rag_ui:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: rag_ui
+    volumes:
+      - .:/src
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    depends_on:
+      - rag_api
+    command: streamlit run app/ui/app.py
