@@ -1,4 +1,5 @@
 import streamlit as st
+import time
 import requests
 
 # APIのベースURL（Docker内でのサービス名またはlocalhost）
@@ -13,17 +14,47 @@ st.markdown("資料をアップロードして、AIに質問")
 with st.sidebar:
     st.header("資料の学習")
     uploaded_file = st.file_uploader("PDFを選択", type="pdf")
+    
     if st.button("学習を開始"):
         if uploaded_file:
-            with st.spinner("解析中..."):
+            # 1. アップロード・保存フェーズ
+            with st.spinner("ファイルをサーバーへ送信中..."):
                 files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
-                response = requests.post(f"{API_URL}/upload", files=files)
-                if response.status_code == 200:
-                    st.success("学習が完了しました！")
-                else:
-                    st.error("エラーが発生しました。")
+                try:
+                    response = requests.post(f"{API_URL}/upload", files=files)
+                    if response.status_code != 200:
+                        st.error("アップロードに失敗しました。")
+                        st.stop()
+                except Exception as e:
+                    st.error(f"通信エラー: {e}")
+                    st.stop()
+
+            # 2. インデックス更新監視フェーズ
+            status_text = st.empty() # 状態を書き換えるためのプレースホルダ
+            start_time = time.time()
+            timeout = 60  # 60秒でタイムアウト
+
+            with st.spinner("新しい知識を脳内に定着させています..."):
+                while True:
+                    try:
+                        res = requests.get(f"{API_URL}/status")
+                        is_indexing = res.json().get("is_indexing")
+                        
+                        if not is_indexing:
+                            st.success("学習完了！質問を受け付けます。")
+                            break
+                    except:
+                        pass # 一時的な通信エラーは無視して続行
+                    
+                    # タイムアウトチェック
+                    if time.time() - start_time > timeout:
+                        st.error("処理がタイムアウトしました。サーバーの状態を確認してください。")
+                        break
+                    
+                    time.sleep(1)  # ここで1秒待機するのが重要！
         else:
             st.warning("ファイルを選択してください。")
+
 
 # メイン画面：チャット履歴の管理
 if "messages" not in st.session_state:

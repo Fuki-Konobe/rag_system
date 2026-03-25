@@ -1,90 +1,121 @@
-import shutil
 import asyncio
-from pathlib import Path
-from fastapi import FastAPI, HTTPException, UploadFile, File
-from fastapi.responses import StreamingResponse
-from app.rag.loader import PDFProcessor
-from langchain_community.document_loaders import PyMuPDFLoader
-from app.rag.vectorstore import VectorStoreManager
-from app.rag.generator import RAGGenerator
-from app.rag.evaluator import RAGEvaluator
+import shutil
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-# グローバルな「状態ホルダー」
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
+
+from app.rag.evaluator import RAGEvaluator
+from app.rag.generator import RAGGenerator
+from app.rag.loader import PDFProcessor
+from app.rag.vectorstore import VectorStoreManager
+
+# ===== 設定定数 =====
+DATA_DIR = Path("data/raw")
+APP_TITLE = "RAG System"
+
+# 初期化時のメッセージ
+MSG_INITIALIZING = "Initializing Hybrid Retriever..."
+MSG_SHUTTING_DOWN = "Shutting down..."
+MSG_BACKGROUND_UPDATE = "Background Task: Updating Hybrid Index..."
+MSG_UPDATE_COMPLETED = "Background Task: Index update completed."
+
+# エラーメッセージ
+ERR_RETRIEVER_UNINITIALIZED = "Retriever not initialized"
+ERR_FILE_EXTENSION = "PDFファイルのみ受け付けています。"
+
+
+# ===== グローバルステート管理 =====
 class AppState:
-    def __init__(self):
+    """アプリケーションのグローバル状態を管理するクラス."""
+    def __init__(self) -> None:
         self.hybrid_retriever = None
+        self.is_indexing = False
+
 
 state = AppState()
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # 【起動時処理】BM25インデックスの初回作成
-    print("Initializing Hybrid Retriever...")
-    processor = PDFProcessor()
-    documents = processor.process_directory("data/raw")
-    state.hybrid_retriever = vdb_manager.get_hybrid_retriever(documents)
-    yield
-    # 【終了時処理】必要ならここでリソース解放
-    print("Shutting down...")
-
-app = FastAPI(title="RAG System", lifespan=lifespan)
-
-# 保存先ディレクトリの準備
-UPLOAD_DIR = Path("data/raw")
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
-# インスタンスの初期化
 vdb_manager = VectorStoreManager()
 generator = RAGGenerator()
 
-@app.post("/upload", summary="PDFファイルをアップロードして学習させる")
-async def upload_file(file: UploadFile = File(...)):
-    # 1. ファイルのバリデーション
-    if not file.filename.endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="PDFファイルのみ受け付けています。")
 
-    file_path = UPLOAD_DIR / file.filename
+# ===== ライフサイクル管理 =====
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """アプリケーションの起動時と終了時の処理を統括.
+    
+    起動時：BM25インデックスの初期化
+    終了時：リソースの解放
+    """
+    print(MSG_INITIALIZING)
+    processor = PDFProcessor()
+    documents = processor.process_directory(str(DATA_DIR))
+    state.hybrid_retriever = vdb_manager.get_hybrid_retriever(documents)
+    
+    yield
+    
+    print(MSG_SHUTTING_DOWN)
 
+
+# ===== FastAPIアプリの初期化 =====
+app = FastAPI(title=APP_TITLE, lifespan=lifespan)
+
+# 保存先ディレクトリの準備
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+
+# ===== バックグラウンドタスク =====
+def update_index_task() -> None:
+    """全PDFファイルをスキャンして検索インデックスを更新する重い処理.
+    
+    バックグラウンドタスクとして実行され、レスポンス返却を阻害しない.
+    """
+    state.is_indexing = True  # 開始時にTrue
     try:
-        # 2. ファイルをローカルに保存
-        with file_path.open("wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-
-        # 3. 保存したファイルを即座にロード・分割
+        print("Background Task: Updating Index...")
         processor = PDFProcessor()
-        loader = PyMuPDFLoader(str(file_path))
-        documents = loader.load()
-        split_docs = processor.text_splitter.split_documents(documents)
+        new_documents = processor.process_directory("data/raw")
+        state.hybrid_retriever = vdb_manager.get_hybrid_retriever(new_documents)
+        print("Background Task: Completed.")
+    finally:
+        state.is_indexing = False  # 成功・失敗に関わらず最後はFalse
 
-        # 4. VectorDBに追加
-        vdb_manager.add_documents(split_docs)
 
-        # 5. Hybrid Retrieverを最新状態に更新
-        new_documents = processor.process_directory(str(UPLOAD_DIR))
-        state.hybrid_retriever = vdb_manager.get_hybrid_retriever(documents=new_documents)
-
-        return {
-            "message": f"ファイル '{file.filename}' の学習が完了しました。",
-            "chunks": len(split_docs)
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/ask")
-async def ask_question(question: str):
-    # 最新のDB状態でリトリーバーを取得
+# ===== APIエンドポイント =====
+@app.post("/ask", summary="質問に対して回答を生成")
+async def ask_question(question: str) -> dict:
+    """質問に対してRAGシステムで回答を生成.
+    
+    Args:
+        question: ユーザーからの質問文
+        
+    Returns:
+        回答を含む辞書
+    """
     retriever = vdb_manager.get_hybrid_retriever()
     rag_chain = generator.get_chain(retriever)
-    
     answer = rag_chain.invoke(question)
+    
     return {"answer": answer}
 
-@app.post("/ask_stream")
+
+@app.post("/ask_stream", summary="質問に対してストリーミングで回答を生成")
 async def ask_stream(question: str):
-    # 毎回読み直さず、起動時に作ったものを使い回す
+    """質問に対してストリーミング形式で回答を生成.
+    
+    起動時に初期化したretrieverを再利用し、高速応答を実現.
+    
+    Args:
+        question: ユーザーからの質問文
+        
+    Raises:
+        HTTPException: Retrieverが未初期化の場合
+        
+    Yields:
+        ストリーミング形式の回答チャンク
+    """
     if not state.hybrid_retriever:
-        raise HTTPException(status_code=503, detail="Retriever not initialized")
+        raise HTTPException(status_code=503, detail=ERR_RETRIEVER_UNINITIALIZED)
     
     rag_chain = generator.get_chain(state.hybrid_retriever)
     
@@ -92,23 +123,71 @@ async def ask_stream(question: str):
         async for chunk in rag_chain.astream(question):
             yield chunk
             await asyncio.sleep(0)
-
+    
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
-@app.post("/evaluate")
-async def run_evaluation(question: str):
-    # 1. 検索実行
+
+@app.post("/evaluate", summary="回答品質を評価")
+async def run_evaluation(question: str) -> dict:
+    """質問に対する回答を生成し、品質を評価.
+    
+    以下の処理を順序実行：
+    1. 関連ドキュメントの検索
+    2. RAGによる回答生成
+    3. 回答品質の評価
+    
+    Args:
+        question: ユーザーからの質問文
+        
+    Returns:
+        評価結果を含む辞書
+    """
     retriever = state.hybrid_retriever
     docs = retriever.get_relevant_documents(question)
     contexts = [doc.page_content for doc in docs]
-
-    # 2. 回答生成（ストリーミングなしの通常生成）
+    
     rag_chain = generator.get_chain(retriever)
     answer = rag_chain.invoke(question)
-
-    # 3. 評価実行
+    
     evaluator = RAGEvaluator(generator.llm)
     report = await evaluator.evaluate_response(question, answer, contexts)
-
-    # Pandasの結果を辞書形式で返す
+    
     return report.to_dict(orient="records")[0]
+
+
+@app.post("/upload", summary="PDFファイルをアップロードしてインデックスを更新")
+async def upload_file(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...)
+) -> dict:
+    """PDFファイルをアップロードしてシステムに学習させる.
+    
+    重いインデックス更新処理はバックグラウンドタスクで実行し、
+    ユーザーへの応答を高速化.
+    
+    Args:
+        background_tasks: バックグラウンドタスク队列
+        file: アップロードされたPDFファイル
+        
+    Returns:
+        ファイル保存受理メッセージ
+    """
+    file_path = DATA_DIR / file.filename
+    
+    try:
+        with file_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # インデックス更新をバックグラウンドで実行
+        background_tasks.add_task(update_index_task)
+        
+        return {
+            "status": "accepted",
+            "message": f"{file.filename} の保存が完了しました。検索インデックスは数秒後に自動更新されます。"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/status")
+async def get_status():
+    return {"is_indexing": state.is_indexing}
