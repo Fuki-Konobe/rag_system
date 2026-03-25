@@ -1,6 +1,8 @@
 import shutil
+import asyncio
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
 from app.rag.loader import PDFProcessor
 from app.rag.vectorstore import VectorStoreManager
 from app.rag.generator import RAGGenerator
@@ -49,8 +51,26 @@ async def upload_file(file: UploadFile = File(...)):
 @app.post("/ask")
 async def ask_question(question: str):
     # 最新のDB状態でリトリーバーを取得
-    retriever = vdb_manager.get_retriever()
+    retriever = vdb_manager.get_hybrid_retriever()
     rag_chain = generator.get_chain(retriever)
     
     answer = rag_chain.invoke(question)
     return {"answer": answer}
+
+@app.post("/ask_stream")
+async def ask_stream(question: str):
+    processor = PDFProcessor()
+    documents = processor.process_directory("data/raw")
+
+    retriever = vdb_manager.get_hybrid_retriever(documents=documents)
+    rag_chain = generator.get_chain(retriever)
+
+    # 非同期ジェネレータを作成
+    async def generate_answer():
+        # astream() を使うことで、生成されたトークンを逐次取得
+        async for chunk in rag_chain.astream(question):
+            yield chunk
+            # ネットワークのバッファリングを考慮し、わずかな待機を入れる場合もあります
+            await asyncio.sleep(0.01)
+
+    return StreamingResponse(generate_answer(), media_type="text/plain")

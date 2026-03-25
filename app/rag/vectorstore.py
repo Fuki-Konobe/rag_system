@@ -1,5 +1,8 @@
 import os
+import MeCab
 from langchain_openai import OpenAIEmbeddings
+from langchain.retrievers import EnsembleRetriever
+from langchain_community.retrievers import BM25Retriever
 from langchain_community.vectorstores import Chroma
 
 class VectorStoreManager:
@@ -25,9 +28,36 @@ class VectorStoreManager:
         vectorstore.persist()
         return vectorstore
 
-    def get_retriever(self, search_kwargs: dict = {"k": 3}):
+    # def get_retriever(self, search_kwargs: dict = {"k": 3}):
+    #     vectorstore = Chroma(
+    #         persist_directory=self.persist_directory,
+    #         embedding_function=self.embeddings
+    #     )
+    #     return vectorstore.as_retriever(search_kwargs=search_kwargs)
+
+    def japanese_tokenizer(text):
+        tagger = MeCab.Tagger("-Owakati")
+        return tagger.parse(text).split()
+
+    def get_hybrid_retriever(self, documents, search_kwargs: dict = {"k": 3}):
+        # 1. ベクトル検索器の準備
         vectorstore = Chroma(
             persist_directory=self.persist_directory,
             embedding_function=self.embeddings
         )
-        return vectorstore.as_retriever(search_kwargs=search_kwargs)
+        vector_retriever = vectorstore.as_retriever(search_kwargs=search_kwargs)
+
+        # 2. BM25検索器の準備（日本語の分かち書きが必要）
+        # documents は分割済みのチャンク（List[Document]）を想定
+        bm25_retriever = BM25Retriever.from_documents(
+            documents,
+            tokenizer=self.japanese_tokenizer
+        )
+        bm25_retriever.k = search_kwargs.get("k", 3)
+
+        # 3. 統合（比率は 0.5:0.5 が一般的）
+        ensemble_retriever = EnsembleRetriever(
+            retrievers=[bm25_retriever, vector_retriever],
+            weights=[0.5, 0.5]
+        )
+        return ensemble_retriever

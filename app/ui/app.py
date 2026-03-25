@@ -4,7 +4,7 @@ import requests
 # APIのベースURL（Docker内でのサービス名またはlocalhost）
 API_URL = "http://rag_api:8000"
 
-st.set_page_config(page_title="Tokushima RAG Assistant", layout="wide")
+st.set_page_config(page_title="RAG System", layout="wide")
 
 st.title("RAGシステム")
 st.markdown("資料をアップロードして、AIに質問")
@@ -43,11 +43,14 @@ if prompt := st.chat_input("質問を入力"):
 
     # AIの回答を取得
     with st.chat_message("assistant"):
-        with st.spinner("思考中..."):
-            response = requests.post(f"{API_URL}/ask", params={"question": prompt})
-            if response.status_code == 200:
-                answer = response.json()["answer"]
-                st.markdown(answer)
-                st.session_state.messages.append({"role": "assistant", "content": answer})
-            else:
-                st.error("APIとの通信に失敗しました。")
+        # st.write_stream を使うと、ジェネレータから渡される文字をアニメーション表示できます
+        def response_generator():
+            # stream=True でリクエストを送り、逐次読み取る
+            with requests.post(f"{API_URL}/ask_stream", params={"question": prompt}, stream=True) as r:
+                for chunk in r.iter_content(chunk_size=None, decode_unicode=True):
+                    if chunk:
+                        yield chunk
+
+        # ストリーミング表示の実行
+        full_response = st.write_stream(response_generator())
+        st.session_state.messages.append({"role": "assistant", "content": full_response})

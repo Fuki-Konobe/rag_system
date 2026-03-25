@@ -6,7 +6,10 @@ from langchain_core.runnables import RunnablePassthrough
 class RAGGenerator:
     def __init__(self):
         # 性能とコストのバランスが良い gpt-3.5-turbo (または最新の gpt-4o-mini)
-        self.llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0)
+        self.llm = ChatOpenAI(
+            model_name="gpt-3.5-turbo",
+            streaming=True,
+            temperature=0)
         self.output_parser = StrOutputParser()
 
     def get_chain(self, retriever):
@@ -23,7 +26,7 @@ class RAGGenerator:
 1. 回答は必ず日本語で行ってください。
 2. 回答の各文章の末尾、または回答の最後に、必ず参照した「ファイル名」と「ページ数」を記載してください。
    例: 「〜〜です（出典: 2024事業計画.pdf P.3）」。
-3. コンテキストに情報が含まれていない場合は、知ったかぶりをせず「社内資料には該当する記載がありません」と伝えてください。
+3. コンテキストに情報が含まれていない場合は、知ったかぶりをせず「資料には該当する記載がありません」と伝えてください。
 4. 複数の資料にまたがる場合は、それらを統合して整理して回答してください。
 
 【コンテキスト】:
