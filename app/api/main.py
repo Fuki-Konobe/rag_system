@@ -7,6 +7,7 @@ from app.rag.loader import PDFProcessor
 from langchain_community.document_loaders import PyMuPDFLoader
 from app.rag.vectorstore import VectorStoreManager
 from app.rag.generator import RAGGenerator
+from app.rag.evaluator import RAGEvaluator
 from contextlib import asynccontextmanager
 
 # グローバルな「状態ホルダー」
@@ -93,3 +94,21 @@ async def ask_stream(question: str):
             await asyncio.sleep(0)
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+@app.post("/evaluate")
+async def run_evaluation(question: str):
+    # 1. 検索実行
+    retriever = state.hybrid_retriever
+    docs = retriever.get_relevant_documents(question)
+    contexts = [doc.page_content for doc in docs]
+
+    # 2. 回答生成（ストリーミングなしの通常生成）
+    rag_chain = generator.get_chain(retriever)
+    answer = rag_chain.invoke(question)
+
+    # 3. 評価実行
+    evaluator = RAGEvaluator(generator.llm)
+    report = await evaluator.evaluate_response(question, answer, contexts)
+
+    # Pandasの結果を辞書形式で返す
+    return report.to_dict(orient="records")[0]

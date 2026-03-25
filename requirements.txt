@@ -31,3 +31,9 @@ rank_bm25
 # 形態素解析器
 mecab-python3
 unidic-lite
+
+ragas
+datasets
+
+anthropic
+instructor
