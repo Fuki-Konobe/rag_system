@@ -4,10 +4,15 @@ from langchain_openai import OpenAIEmbeddings
 from langchain.retrievers import EnsembleRetriever
 from langchain_community.retrievers import BM25Retriever
 from langchain_community.vectorstores import Chroma
+from chromadb.config import Settings
 
 class VectorStoreManager:
     def __init__(self, persist_directory: str = "/src/data/vectordb"): # コンテナ内の絶対パスに変更
         self.persist_directory = persist_directory
+        self.chroma_settings = Settings(
+            anonymized_telemetry=False,
+            is_persistent=True
+        )
         
         # フォルダが存在しない場合に自動作成
         if not os.path.exists(self.persist_directory):
@@ -23,7 +28,8 @@ class VectorStoreManager:
         vectorstore = Chroma.from_documents(
             documents=documents,
             embedding=self.embeddings,
-            persist_directory=self.persist_directory
+            persist_directory=self.persist_directory,
+            client_settings=self.chroma_settings
         )
         vectorstore.persist()
         return vectorstore
@@ -43,7 +49,8 @@ class VectorStoreManager:
         # 1. ベクトル検索器の準備
         vectorstore = Chroma(
             persist_directory=self.persist_directory,
-            embedding_function=self.embeddings
+            embedding_function=self.embeddings,
+            client_settings=self.chroma_settings
         )
         vector_retriever = vectorstore.as_retriever(search_kwargs=search_kwargs)
 

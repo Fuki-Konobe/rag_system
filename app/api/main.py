@@ -11,6 +11,17 @@ from app.rag.generator import RAGGenerator
 from app.rag.loader import PDFProcessor
 from app.rag.vectorstore import VectorStoreManager
 
+import logging
+import warnings
+
+# 1. すべてのロガーから 'chromadb' と 'posthog' を黙らせる
+logging.getLogger('chromadb').setLevel(logging.ERROR)
+logging.getLogger('posthog').setLevel(logging.ERROR)
+
+# 2. それでも標準出力(stdout)に直接書き込まれるログを抑制する
+# (特にライブラリ内部で print や直書きされている場合)
+warnings.filterwarnings("ignore", message="Failed to send telemetry event")
+
 # ===== 設定定数 =====
 DATA_DIR = Path("data/raw")
 APP_TITLE = "RAG System"
