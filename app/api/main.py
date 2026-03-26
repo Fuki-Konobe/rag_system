@@ -52,6 +52,17 @@ async def lifespan(app: FastAPI):
     documents = processor.process_directory(str(DATA_DIR))
     state.hybrid_retriever = vdb_manager.get_hybrid_retriever(documents)
     
+    if documents:
+        # 2. 空になったDBにデータを追加（永続化）
+        vdb_manager.add_documents(documents)
+        # 3. リトリーバーを構成
+        state.hybrid_retriever = vdb_manager.get_hybrid_retriever(documents)
+        print(f"System initialized with {len(documents)} chunks.")
+    else:
+        print("Warning: No documents found in DATA_DIR. DB remains empty.")
+    
+    yield
+
     yield
     
     print(MSG_SHUTTING_DOWN)
