@@ -1,6 +1,7 @@
 import streamlit as st
 import time
 import requests
+import json
 
 # APIのベースURL（Docker内でのサービス名またはlocalhost）
 API_URL = "http://rag_api:8000"
@@ -65,6 +66,39 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+def response_generator(prompt):
+    # セッション状態をリセット
+    st.session_state.last_sources = []
+    
+    with requests.post(f"{API_URL}/ask_stream", params={"question": prompt}, stream=True) as r:
+        for chunk in r.iter_content(chunk_size=None, decode_unicode=True):
+            if "SOURCES_JSON:" in chunk:
+                # 1. 回答テキストとJSONを分離
+                parts = chunk.split("SOURCES_JSON:")
+                yield parts[0]
+                
+                try:
+                    # 2. JSONをパース（ユニコードも自動で日本語に戻ります）
+                    raw_sources = json.loads(parts[1])
+                    
+                    # 3. 無効なデータ(null)を除去し、重複を排除
+                    cleaned_sources = []
+                    seen = set()
+                    for s in raw_sources:
+                        fname = s.get("file")
+                        pnum = s.get("page")
+                        if fname: # ファイル名が存在する場合のみ追加
+                            label = f"{fname} (p.{pnum})"
+                            if label not in seen:
+                                cleaned_sources.append(s)
+                                seen.add(label)
+                    
+                    st.session_state.last_sources = cleaned_sources
+                except Exception as e:
+                    print(f"JSONパースエラー: {e}")
+            else:
+                yield chunk
+
 # ユーザー入力
 if prompt := st.chat_input("質問を入力"):
     # ユーザーメッセージを表示
@@ -74,14 +108,13 @@ if prompt := st.chat_input("質問を入力"):
 
     # AIの回答を取得
     with st.chat_message("assistant"):
-        # st.write_stream を使うと、ジェネレータから渡される文字をアニメーション表示できます
-        def response_generator():
-            # stream=True でリクエストを送り、逐次読み取る
-            with requests.post(f"{API_URL}/ask_stream", params={"question": prompt}, stream=True) as r:
-                for chunk in r.iter_content(chunk_size=None, decode_unicode=True):
-                    if chunk:
-                        yield chunk
-
         # ストリーミング表示の実行
-        full_response = st.write_stream(response_generator())
+        full_response = st.write_stream(response_generator(prompt))
+
+        # 終了後にメタデータを表示
+        if st.session_state.get("last_sources"):
+            with st.expander("📚 参照した根拠資料"):
+                for s in st.session_state.last_sources:
+                    st.caption(f"📄 {s['file']} (p.{s['page']})")
+
         st.session_state.messages.append({"role": "assistant", "content": full_response})

@@ -21,10 +21,21 @@ class PDFProcessor:
         )
         
         raw_documents = loader.load()
-        print(f"読み込み完了: {len(raw_documents)} ページ (全ファイル合計)")
+        print(f"読込完了: {len(raw_documents)} ページ ")
 
         # 2. まとめてチャンク分割
         split_docs = self.text_splitter.split_documents(raw_documents)
         print(f"分割完了: {len(split_docs)} チャンク")
+
+        for doc in split_docs:
+            # 1. sourceフルパスからファイル名のみを抽出して新設
+            if "source" in doc.metadata:
+                doc.metadata["file_name"] = os.path.basename(doc.metadata["source"])
+            
+            # 2. ページ番号を1始まりに補正 (表示用)
+            # PyMuPDFLoaderはデフォルトで 'page' を持っています
+            current_page = doc.metadata.get("page", 0)
+            doc.metadata["page_number"] = current_page + 1
         
+        print(f"メタデータ付与完了")
         return split_docs

@@ -1,5 +1,6 @@
 import asyncio
 import shutil
+import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -139,12 +140,20 @@ async def ask_stream(question: str):
     if not state.hybrid_retriever:
         raise HTTPException(status_code=503, detail=ERR_RETRIEVER_UNINITIALIZED)
     
+    # 1. まず検索してメタデータを確保しておく
+    docs = state.hybrid_retriever.get_relevant_documents(question)
+    sources = [{"file": d.metadata.get("file_name"), "page": d.metadata.get("page_number")} for d in docs]
+
     rag_chain = generator.get_chain(state.hybrid_retriever)
     
     async def event_generator():
+        # 2. 回答をストリーミング
         async for chunk in rag_chain.astream(question):
             yield chunk
             await asyncio.sleep(0)
+        
+        # 3. 最後に区切り文字とJSON化したメタデータを流す
+        yield f"\n\nSOURCES_JSON:{json.dumps(sources)}"
     
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
@@ -152,12 +161,7 @@ async def ask_stream(question: str):
 @app.post("/evaluate", summary="回答品質を評価")
 async def run_evaluation(question: str) -> dict:
     """質問に対する回答を生成し、品質を評価.
-    
-    以下の処理を順序実行：
-    1. 関連ドキュメントの検索
-    2. RAGによる回答生成
-    3. 回答品質の評価
-    
+
     Args:
         question: ユーザーからの質問文
         
@@ -165,16 +169,34 @@ async def run_evaluation(question: str) -> dict:
         評価結果を含む辞書
     """
     retriever = state.hybrid_retriever
+    # 1. 関連ドキュメントの検索
     docs = retriever.get_relevant_documents(question)
+
+    # 2. メタデータから重複のないソースリストを作成
+    sources = []
+    seen_sources = set()
+    for d in docs:
+        fname = d.metadata.get("file_name", "不明なファイル")
+        pnum = d.metadata.get("page_number", "-")
+        source_label = f"{fname} (p.{pnum})"
+        
+        if source_label not in seen_sources:
+            sources.append({"file": fname, "page": pnum})
+            seen_sources.add(source_label)
+
+    # 3. 回答生成と評価
     contexts = [doc.page_content for doc in docs]
-    
     rag_chain = generator.get_chain(retriever)
     answer = rag_chain.invoke(question)
     
     evaluator = RAGEvaluator(generator.llm)
     report = await evaluator.evaluate_response(question, answer, contexts)
     
-    return report.to_dict(orient="records")[0]
+    # 4. レスポンスにソース情報を結合
+    result = report.to_dict(orient="records")[0]
+    result["sources"] = sources
+
+    return result
 
 
 @app.post("/upload", summary="PDFファイルをアップロードしてインデックスを更新")
