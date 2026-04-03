@@ -49,7 +49,7 @@ class VectorStoreManager:
         tagger = MeCab.Tagger("-Owakati")
         return tagger.parse(text).split()
 
-    def get_hybrid_retriever(self, documents, search_kwargs: dict = {"k": 5}):
+    def get_hybrid_retriever(self, documents, search_kwargs: dict = {"k": 3}):
         # 1. ベクトル検索器の準備
         vectorstore = Chroma(
             persist_directory=self.persist_directory,
@@ -64,7 +64,7 @@ class VectorStoreManager:
             documents,
             tokenizer=self.japanese_tokenizer
         )
-        bm25_retriever.k = search_kwargs.get("k", 5)
+        bm25_retriever.k = search_kwargs.get("k", 3)
 
         # 3. 統合（比率は 0.5:0.5 が一般的）
         ensemble_retriever = EnsembleRetriever(

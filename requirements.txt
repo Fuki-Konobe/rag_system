@@ -38,3 +38,7 @@ datasets
 anthropic
 instructor
 flashrank
+
+pdfplumber
+pandas
+tabulate

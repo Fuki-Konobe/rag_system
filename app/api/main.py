@@ -3,9 +3,11 @@ import shutil
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
+import math
 
 from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
+from fastapi.encoders import jsonable_encoder
 
 from app.rag.evaluator import RAGEvaluator
 from app.rag.generator import RAGGenerator
@@ -36,6 +38,32 @@ MSG_UPDATE_COMPLETED = "Background Task: Index update completed."
 # エラーメッセージ
 ERR_RETRIEVER_UNINITIALIZED = "Retriever not initialized"
 ERR_FILE_EXTENSION = "PDFファイルのみ受け付けています。"
+
+
+# ===== ユーティリティ関数 =====
+def clean_float_values(obj):
+    """
+    inf/nanをJSON互換の値に変換.
+    
+    Args:
+        obj: 変換対象のオブジェクト（dict, list, float等）
+    
+    Returns:
+        JSON互換なクリーニング済みオブジェクト
+    """
+    if isinstance(obj, dict):
+        return {key: clean_float_values(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [clean_float_values(item) for item in obj]
+    elif isinstance(obj, float):
+        if math.isnan(obj):
+            return None  # NaN → null
+        elif math.isinf(obj):
+            return 1.0 if obj > 0 else -1.0  # inf → 1.0 / -inf → -1.0
+        else:
+            return obj
+    else:
+        return obj
 
 
 # ===== グローバルステート管理 =====
@@ -193,6 +221,9 @@ async def run_evaluation(question: str) -> dict:
     # 4. レスポンスにソース情報を結合
     result = report.to_dict(orient="records")[0]
     result["sources"] = sources
+    
+    # 5. inf/nan値をJSON互換形式に変換
+    result = clean_float_values(result)
 
     return result
 
