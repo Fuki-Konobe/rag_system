@@ -69,7 +69,7 @@ class VectorStoreManager:
         # 3. 統合（比率は 0.5:0.5 が一般的）
         ensemble_retriever = EnsembleRetriever(
             retrievers=[bm25_retriever, vector_retriever],
-            weights=[0.5, 0.5]
+            weights=[0.6, 0.4]
         )
 
         mq_retriever = MultiQueryRetriever.from_llm(

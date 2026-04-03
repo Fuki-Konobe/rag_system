@@ -28,12 +28,12 @@ class PDFProcessor:
         print(f"分割完了: {len(split_docs)} チャンク")
 
         for doc in split_docs:
-            # 1. sourceフルパスからファイル名のみを抽出して新設
             if "source" in doc.metadata:
-                doc.metadata["file_name"] = os.path.basename(doc.metadata["source"])
-            
-            # 2. ページ番号を1始まりに補正 (表示用)
-            # PyMuPDFLoaderはデフォルトで 'page' を持っています
+                fname = os.path.basename(doc.metadata["source"])
+                doc.metadata["file_name"] = fname
+                prefix = f"【資料名：{fname}】"
+                doc.page_content = prefix + doc.page_content
+
             current_page = doc.metadata.get("page", 0)
             doc.metadata["page_number"] = current_page + 1
         
