@@ -1,10 +1,15 @@
 import os
 import MeCab
-from langchain_openai import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain.retrievers import EnsembleRetriever
 from langchain_community.retrievers import BM25Retriever
+from langchain.retrievers.multi_query import MultiQueryRetriever
 from langchain_community.vectorstores import Chroma
 from chromadb.config import Settings
+
+from langchain.globals import set_verbose
+
+set_verbose(True)
 
 class VectorStoreManager:
     def __init__(self, persist_directory: str = "/src/data/vectordb"): # コンテナ内の絶対パスに変更
@@ -20,6 +25,12 @@ class VectorStoreManager:
 
         self.embeddings = OpenAIEmbeddings(
             model="text-embedding-3-small",
+            openai_api_key=os.getenv("OPENAI_API_KEY")
+        )
+
+        self.llm = ChatOpenAI(
+            model="gpt-4o-mini", 
+            temperature=0,
             openai_api_key=os.getenv("OPENAI_API_KEY")
         )
 
@@ -60,4 +71,10 @@ class VectorStoreManager:
             retrievers=[bm25_retriever, vector_retriever],
             weights=[0.5, 0.5]
         )
-        return ensemble_retriever
+
+        mq_retriever = MultiQueryRetriever.from_llm(
+            retriever=ensemble_retriever,
+            llm=self.llm
+        )
+        
+        return mq_retriever
