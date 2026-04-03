@@ -5,7 +5,7 @@ from typing import List
 from langchain_core.documents import Document
 
 class PDFProcessor:
-    def __init__(self, chunk_size: int = 1000, chunk_overlap: int = 200): # サイズを拡大
+    def __init__(self, chunk_size: int = 500, chunk_overlap: int = 100): # サイズを拡大
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,

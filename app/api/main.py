@@ -74,8 +74,6 @@ async def lifespan(app: FastAPI):
         print("Warning: No documents found in DATA_DIR. DB remains empty.")
     
     yield
-
-    yield
     
     print(MSG_SHUTTING_DOWN)
 
