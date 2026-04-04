@@ -27,11 +27,26 @@ class PDFProcessor:
                     table_content = ""
                     if tables:
                         for table in tables:
-                            # None値を空文字に置換してDataFrame化
-                            df = pd.DataFrame(table).fillna("")
-                            # 1行目をヘッダーとして扱う（表として認識しやすくする）
-                            if not df.empty:
-                                table_content += "\n\n" + df.to_markdown(index=False) + "\n\n"
+                            # 表が空でないかチェック
+                            if not table or len(table) < 2: continue
+                            
+                            df = pd.DataFrame(table).fillna(" ")
+                            # ヘッダーを取得
+                            headers = [str(c).replace("\n", "") for c in df.iloc[0]]
+                            
+                            # 各行に対して「ヘッダー: 値」の形式で書き出し、文脈を固定する
+                            formatted_rows = []
+                            for _, row in df.iloc[1:].iterrows():
+                                # f-stringの外側でreplaceを行うか、結合して回避
+                                cells = []
+                                for h, v in zip(headers, row):
+                                    # 値から改行を消して「ヘッダー: 値」の形式にする
+                                    clean_val = str(v).replace("\n", "")
+                                    cells.append(f"{h}: {clean_val}")
+                                
+                                formatted_rows.append(" / ".join(cells))
+                            
+                            table_content += "\n\n【表データ】\n" + "\n".join(formatted_rows) + "\n\n"
                     
                     # テキストと構造化された表データを結合
                     # これにより「賃金」の横に金額がある構造を維持
