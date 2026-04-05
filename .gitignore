@@ -12,3 +12,7 @@ data/vectordb/
 .venv/
 node_modules/
 *.log
+
+# 評価に関する入力・出力ファイル
+*.jsonl
+eval_results/

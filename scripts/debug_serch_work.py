@@ -17,8 +17,8 @@ def debug_rent_issue():
     processor = PDFProcessor(chunk_size=500, chunk_overlap=100)
     
     # ターゲット単語
-    target_word = "賃金"
-    target_file = "収支計画.pdf"
+    target_word = "交流会"
+    target_file = "企画提案書.pdf"
     
     # データディレクトリ（コンテナ環境に対応）
     data_dir = Path("/src/data/raw") if Path("/src/data/raw").exists() else Path("data/raw")

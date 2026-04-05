@@ -42,3 +42,8 @@ flashrank
 pdfplumber
 pandas
 tabulate
+
+openpyxl
+scikit-learn
+bert-score
+python-dotenv

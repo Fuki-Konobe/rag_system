@@ -70,7 +70,7 @@ def clean_float_values(obj):
 class AppState:
     """アプリケーションのグローバル状態を管理するクラス."""
     def __init__(self) -> None:
-        self.hybrid_retriever = None
+        self.retriever = None
         self.is_indexing = False
 
 
@@ -90,13 +90,13 @@ async def lifespan(app: FastAPI):
     print(MSG_INITIALIZING)
     processor = PDFProcessor()
     documents = processor.process_directory(str(DATA_DIR))
-    state.hybrid_retriever = vdb_manager.get_hybrid_retriever(documents)
+    state.retriever = vdb_manager.get_hybrid_retriever(documents)
     
     if documents:
         # 2. 空になったDBにデータを追加（永続化）
         vdb_manager.add_documents(documents)
         # 3. リトリーバーを構成
-        state.hybrid_retriever = vdb_manager.get_hybrid_retriever(documents)
+        state.retriever = vdb_manager.get_hybrid_retriever(documents)
         print(f"System initialized with {len(documents)} chunks.")
     else:
         print("Warning: No documents found in DATA_DIR. DB remains empty.")
@@ -124,7 +124,7 @@ def update_index_task() -> None:
         print("Background Task: Updating Index...")
         processor = PDFProcessor()
         new_documents = processor.process_directory("data/raw")
-        state.hybrid_retriever = vdb_manager.get_hybrid_retriever(new_documents)
+        state.retriever = vdb_manager.get_hybrid_retriever(new_documents)
         print("Background Task: Completed.")
     finally:
         state.is_indexing = False  # 成功・失敗に関わらず最後はFalse
@@ -139,13 +139,26 @@ async def ask_question(question: str) -> dict:
         question: ユーザーからの質問文
         
     Returns:
-        回答を含む辞書
+        {
+            "answer": RAGシステムが生成した回答テキスト,
+            "sources": [
+                {"file_name": "関連ドキュメント1.pdf", "page": 5},
+                {"file_name": "関連ドキュメント2.pdf", "page": 12}
+            ]
+        }
     """
-    retriever = vdb_manager.get_hybrid_retriever()
-    rag_chain = generator.get_chain(retriever)
+    # Retrieverが初期化されていない場合は初期化（スクリプト実行時用）
+    if state.retriever is None:
+        processor = PDFProcessor()
+        documents = processor.process_directory(str(DATA_DIR))
+        state.retriever = vdb_manager.get_hybrid_retriever(documents)
+        
+    docs = state.retriever.get_relevant_documents(question)
+    sources = [{"file_name": d.metadata.get("file_name"), "page": d.metadata.get("page_number")} for d in docs]
+    rag_chain = generator.get_chain(state.retriever)
     answer = rag_chain.invoke(question)
     
-    return {"answer": answer}
+    return {"answer": answer, "sources": sources}
 
 
 @app.post("/ask_stream", summary="質問に対してストリーミングで回答を生成")
@@ -163,14 +176,14 @@ async def ask_stream(question: str):
     Yields:
         ストリーミング形式の回答チャンク
     """
-    if not state.hybrid_retriever:
+    if not state.retriever:
         raise HTTPException(status_code=503, detail=ERR_RETRIEVER_UNINITIALIZED)
     
     # 1. まず検索してメタデータを確保しておく
-    docs = state.hybrid_retriever.get_relevant_documents(question)
+    docs = state.retriever.get_relevant_documents(question)
     sources = [{"file": d.metadata.get("file_name"), "page": d.metadata.get("page_number")} for d in docs]
 
-    rag_chain = generator.get_chain(state.hybrid_retriever)
+    rag_chain = generator.get_chain(state.retriever)
     
     async def event_generator():
         # 2. 回答をストリーミング
@@ -194,7 +207,7 @@ async def run_evaluation(question: str) -> dict:
     Returns:
         評価結果を含む辞書
     """
-    retriever = state.hybrid_retriever
+    retriever = state.retriever
     # 1. 関連ドキュメントの検索
     docs = retriever.get_relevant_documents(question)
 
