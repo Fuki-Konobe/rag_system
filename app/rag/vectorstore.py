@@ -7,10 +7,6 @@ from langchain.retrievers.multi_query import MultiQueryRetriever
 from langchain_community.vectorstores import Chroma
 from chromadb.config import Settings
 
-from langchain.globals import set_verbose
-
-set_verbose(True)
-
 class VectorStoreManager:
     def __init__(self, persist_directory: str = "/src/data/vectordb"): # コンテナ内の絶対パスに変更
         self.persist_directory = persist_directory

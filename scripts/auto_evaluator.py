@@ -129,10 +129,6 @@ class RAGEvaluator:
             all_acts.append(actual_answer if actual_answer else " ")
 
         # 4. BERTScore の計算 (一括処理で高速化)
-        if os.getenv("HF_TOKEN"):
-            print("✅ HF_TOKEN が正常にロードされました")
-        else:
-            print("⚠️ HF_TOKEN が見つかりません。.env ファイルを確認してください")
         print("💡 BERTScoreを計算中...")
         P, R, F1 = bert_score_fn(all_acts, all_refs, lang="ja", rescale_with_baseline=True)
         for i, res in enumerate(results):
