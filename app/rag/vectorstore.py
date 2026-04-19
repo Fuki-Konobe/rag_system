@@ -1,5 +1,11 @@
 import os
 import MeCab
+import torch
+from typing import Any
+from pydantic import PrivateAttr
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from langchain.retrievers.document_compressors.base import BaseDocumentCompressor
+from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain.retrievers import EnsembleRetriever, ContextualCompressionRetriever
 from langchain_community.retrievers import BM25Retriever
@@ -8,6 +14,48 @@ from langchain_community.vectorstores import Chroma
 from langchain.retrievers.document_compressors import FlashrankRerank
 from langchain.prompts import PromptTemplate
 from chromadb.config import Settings
+
+class BGEBasedReranker(BaseDocumentCompressor):
+    model_name: str = "BAAI/bge-reranker-v2-m3"
+    top_n: int = 5
+    device: str = "cuda" if torch.cuda.is_available() else "cpu"
+    
+    # PrivateAttrとして定義することで、Pydanticのフィールドチェックを回避
+    _model: Any = PrivateAttr()
+    _tokenizer: Any = PrivateAttr()
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Pydanticの__setattr__を回避して代入
+        object.__setattr__(self, "_tokenizer", AutoTokenizer.from_pretrained(self.model_name))
+        object.__setattr__(self, "_model", AutoModelForSequenceClassification.from_pretrained(self.model_name))
+        self._model.to(self.device)
+        self._model.eval()
+
+    def compress_documents(self, documents, query, callbacks=None):
+        if not documents:
+            return []
+
+        passages = [doc.page_content for doc in documents]
+        pairs = [[query, p] for p in passages]
+
+        with torch.no_grad():
+            inputs = self._tokenizer(
+                pairs, 
+                padding=True, 
+                truncation=True, 
+                return_tensors='pt', 
+                max_length=512
+            ).to(self.device)
+            
+            logits = self._model(**inputs, return_dict=True).logits
+            scores = logits.view(-1,).float().cpu().tolist()
+
+        for doc, score in zip(documents, scores):
+            doc.metadata["rerank_score"] = score
+
+        sorted_docs = sorted(documents, key=lambda x: x.metadata["rerank_score"], reverse=True)
+        return sorted_docs[:self.top_n]
 
 class VectorStoreManager:
     def __init__(self, persist_directory: str = "/src/data/vectordb"):
@@ -90,14 +138,9 @@ class VectorStoreManager:
             prompt=CUSTOM_QUERY_PROMPT,
         )
 
-        # 5. FlashRankによるリランキング (Contextual Compressionの実装)
-        # PyTorch非依存で高速に動作する多言語対応モデルを指定
-        compressor = FlashrankRerank(
-            model="ms-marco-MiniLM-L-12-v2",
-            top_n=final_k
-        )
+        # BGE-Rerankerを適用
+        compressor = BGEBasedReranker(top_n=final_k)
         
-        # 最終的なリトリーバーパイプラインの構築
         compression_retriever = ContextualCompressionRetriever(
             base_compressor=compressor,
             base_retriever=mq_retriever

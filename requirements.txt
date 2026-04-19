@@ -69,3 +69,7 @@ ragas
 datasets
 flashrank
 bert-score
+
+
+transformers
+torch
