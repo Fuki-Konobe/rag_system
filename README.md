@@ -902,8 +902,6 @@ class AdministrativeRAGMetrics:
 #### 4. 計算コスト最適化
 - **Token 消費量の削減**
   ```
-  現在: 質問1件あたり 平均 2,000 tokens
-  目標: 1,500 tokens (25% 削減)
   
   方法:
   - Prompt の精密化（不要な指示削除）
@@ -913,8 +911,6 @@ class AdministrativeRAGMetrics:
 
 - **推論時間の短縮**
   ```
-  現在: 平均 2.5 秒
-  目標: 1.5 秒
   
   方法:
   - BGE-Reranker の量子化
@@ -1013,57 +1009,5 @@ pytest tests/
 MIT License
 
 このプロジェクトは自由に使用、修正、配布できます。
-詳細は [LICENSE](LICENSE) ファイルを参照してください。
 
 ---
-
-## 📧 サポート・フィードバック
-
-### 問題報告 / 機能リクエスト
-
-GitHub Issues で報告してください：
-```
-https://github.com/YOUR_ORG/regional-knowledge-rag/issues
-```
-
-### お問い合わせ
-
-```
-E-mail: contact@example.com
-Website: https://example.com
-```
-
----
-
-## 👏 謝辞
-
-このプロジェクトは以下の素晴らしいオープンソースプロジェクトに支えられています：
-
-- **LangChain**: RAG パイプラインの構築
-- **Chroma**: ベクトル DB
-- **BAAI/bge-reranker**: ドキュメントリランキング
-- **OpenAI**: 言語モデル API
-- **FastAPI**: 高速な Web フレームワーク
-- **Streamlit**: UI プロトタイピング
-
----
-
-## 📚 参考資料
-
-### 論文・記事
-
-- [RAG はどのように機能するのか (LangChain Docs)](https://docs.langchain.com/docs/use_cases/qa_structured/qa)
-- [ハイブリッド検索の最適化 (Arxiv)](https://arxiv.org)
-- [日本語 NLP ベストプラクティス](https://nlp.ist.i.kyoto-u.ac.jp/)
-
-### 関連プロジェクト
-
-- [LlamaIndex](https://www.llamaindex.ai/) - 別の RAG フレームワーク
-- [RAGAS](https://docs.ragas.io/) - RAG 評価フレームワーク
-
----
-
-**Last Updated**: 2025-05-01  
-**Maintainer**: Your Name / Your Organization  
-**Status**: ✨ Production-Ready
-
