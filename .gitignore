@@ -2,13 +2,17 @@
 __pycache__/
 *.py[cod]
 
-# 環境変数（APIキーを含むため絶対にあげない）
+# 環境変数
 .env
 
-# データベース本体（重い上にローカル環境に依存するため）
+# データベース本体
 data/vectordb/
 
 # 仮想環境やログ
 .venv/
 node_modules/
 *.log
+
+# 評価に関する入力・出力ファイル
+*.jsonl
+eval_results/
