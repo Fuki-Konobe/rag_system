@@ -13,6 +13,27 @@
 
 ---
 
+## 🛠️ Tech Stack
+
+[![LangChain](https://img.shields.io/badge/LangChain-RAG-green?style=flat-square)](https://www.langchain.com/)
+[![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4o--mini-blue?style=flat-square)](https://openai.com/)
+[![Chroma](https://img.shields.io/badge/Chroma-Vector%20DB-orange?style=flat-square)](https://www.trychroma.com/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-REST%20API-009688?style=flat-square)](https://fastapi.tiangolo.com/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-UI-FF4B4B?style=flat-square)](https://streamlit.io/)
+[![Docker](https://img.shields.io/badge/Docker-Container-2496ED?style=flat-square)](https://www.docker.com/)
+
+[![Chroma DB](https://img.shields.io/badge/Chroma-Vector%20Storage-FF6B6B?style=flat-square)](https://www.trychroma.com/)
+[![BM25](https://img.shields.io/badge/BM25-Lexical%20Search-yellow?style=flat-square)](https://en.wikipedia.org/wiki/Okapi_BM25)
+[![BGE Reranker](https://img.shields.io/badge/BAAI%2Fbge--reranker-Reranking-9C27B0?style=flat-square)](https://huggingface.co/BAAI/bge-reranker-v2-m3)
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square)](https://www.python.org/)
+
+[![pdfplumber](https://img.shields.io/badge/pdfplumber-PDF%20Processing-FF6B6B?style=flat-square)](https://github.com/jsvine/pdfplumber)
+[![PyMuPDF](https://img.shields.io/badge/PyMuPDF-PDF%20Extraction-FF6B6B?style=flat-square)](https://pymupdf.io/)
+[![RAGAS](https://img.shields.io/badge/RAGAS-Evaluation-4CAF50?style=flat-square)](https://docs.ragas.io/)
+[![BERTScore](https://img.shields.io/badge/BERTScore-Metrics-FFA500?style=flat-square)](https://github.com/Tiiiger/bert_score)
+
+---
+
 ## 🎯 背景・課題
 
 ### 問題設定
@@ -260,111 +281,134 @@ GET /health
 
 ### 全体構成図
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      Streamlit UI                            │
-│              (Web Interface - Port 8501)                    │
-└─────────────────────────────────────────────────────────────┘
-                            ↕
-┌─────────────────────────────────────────────────────────────┐
-│                    FastAPI Backend                           │
-│              (REST API - Port 8000)                         │
-├─────────────────────────────────────────────────────────────┤
-│ ┌─────────────────────────────────────────────────────────┐ │
-│ │              RAG Pipeline Layer                         │ │
-│ ├─────────────────────────────────────────────────────────┤ │
-│ │ [PDFProcessor]      [VectorStore]    [Retriever]        │ │
-│ │ ├─テキスト抽出    ├─Chroma DB     ├─BM25              │ │
-│ │ ├─表抽出          ├─Persistence   ├─Vector            │ │
-│ │ └─LLM要約         └─Embeddings    └─MultiQuery        │ │
-│ │                                                         │ │
-│ │ [RAGGenerator]         [RAGEvaluator]                   │ │
-│ │ ├─LLM Chain           ├─LLM Judge                      │ │
-│ │ ├─Prompt              ├─BERTScore                      │ │
-│ │ └─Streaming           └─Metrics                        │ │
-│ └─────────────────────────────────────────────────────────┘ │
-│                            ↕                                 │
-│ ┌─────────────────────────────────────────────────────────┐ │
-│ │           External Services & Models                   │ │
-│ ├─────────────────────────────────────────────────────────┤ │
-│ │ OpenAI API                                              │ │
-│ │ ├─ gpt-4o-mini (text generation)                       │ │
-│ │ └─ text-embedding-3-small (semantic embeddings)        │ │
-│ │                                                         │ │
-│ │ Hugging Face Models (Local)                            │ │
-│ │ └─ BAAI/bge-reranker-v2-m3 (reranking)                │ │
-│ └─────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-                            ↕
-┌─────────────────────────────────────────────────────────────┐
-│                   Data & Persistence Layer                   │
-├─────────────────────────────────────────────────────────────┤
-│ data/                                                         │
-│ ├─ raw/              (PDFドキュメント入力)                  │
-│ ├─ processed/        (処理済みテキスト・メタデータ)         │
-│ ├─ vectordb/         (Chroma永続化ベクトルDB)              │
-│ │  └─ chroma.sqlite3                                      │
-│ └─ evaluation_results/  (評価結果・メトリクス)             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph UI["🎨 User Interface Layer"]
+        A["Streamlit Web UI<br/>(Port 8501)"]
+    end
+    
+    subgraph API["⚡ FastAPI Backend<br/>(Port 8000)"]
+        B["📤 Upload Handler"]
+        C["❓ Query Handler"]
+        D["📊 Status Monitor"]
+    end
+    
+    subgraph RAG["🔍 RAG Pipeline Layer"]
+        E["📄 PDFProcessor<br/>pdfplumber + PyMuPDF"]
+        F["🗂️ VectorStoreManager<br/>Chroma DB"]
+        G["🔎 Hybrid Retriever<br/>BM25 + Vector"]
+        H["📝 RAGGenerator<br/>LLM Chain"]
+        I["📈 RAGEvaluator<br/>Metrics"]
+    end
+    
+    subgraph EXT["🌐 External Services & Models"]
+        J["🤖 OpenAI API<br/>gpt-4o-mini<br/>text-embedding-3-small"]
+        K["🧠 Hugging Face<br/>BAAI/bge-reranker-v2-m3"]
+    end
+    
+    subgraph DATA["💾 Data & Persistence Layer"]
+        L["📂 data/raw<br/>PDF Input"]
+        M["📊 data/vectordb<br/>Chroma Index"]
+        N["📈 data/evaluation_results<br/>Metrics"]
+    end
+    
+    A -->|PDF Upload| B
+    A -->|User Question| C
+    B --> E
+    E --> F
+    F --> M
+    C --> G
+    G -->|Search| F
+    G --> H
+    H --> J
+    H --> I
+    I --> N
+    F -->|Embeddings| J
+    G -->|Reranking| K
+    L --> E
+    
+    style UI fill:#e1f5ff
+    style API fill:#fff3e0
+    style RAG fill:#f3e5f5
+    style EXT fill:#e8f5e9
+    style DATA fill:#fce4ec
 ```
 
 ### コンポーネント間のデータフロー
 
 #### ドキュメント取り込みフロー
 
-```
-User Upload (Streamlit)
-    ↓
-POST /upload (FastAPI)
-    ↓
-[1] ファイル保存: data/raw/{filename}.pdf
-    ↓
-[2] PDFProcessor (Async)
-    ├─ pdfplumber でテキスト抽出
-    ├─ PyMuPDF でテーブル抽出
-    └─ LLM で資料概要を生成
-    ↓
-[3] Document チャンクの生成
-    └─ RecursiveCharacterTextSplitter
-    ↓
-[4] ベクトル化 + Chroma DB に保存
-    ├─ OpenAI Embeddings
-    └─ 永続化: data/vectordb/chroma.sqlite3
-    ↓
-[5] BM25 インデックス再構築
-    └─ MeCab で日本語分かち書き
-    ↓
-UI: "学習完了"
+```mermaid
+sequenceDiagram
+    participant User as 👤 User
+    participant UI as 🎨 Streamlit UI
+    participant API as ⚡ FastAPI
+    participant Processor as 📄 PDFProcessor
+    participant VectorDB as 🗂️ VectorDB
+    participant OpenAI as 🤖 OpenAI API
+    
+    User->>UI: PDFファイルを選択
+    UI->>API: POST /upload (file)
+    API->>API: data/raw/{filename}.pdf に保存
+    
+    API->>Processor: 非同期処理開始
+    Processor->>Processor: テキスト抽出 (pdfplumber)
+    Processor->>Processor: テーブル抽出 (PyMuPDF)
+    Processor->>OpenAI: 資料概要を要約
+    OpenAI-->>Processor: サマリ返却
+    Processor->>Processor: RecursiveCharacterTextSplitter<br/>でチャンク分割
+    Processor->>OpenAI: Embeddings 計算
+    OpenAI-->>Processor: ベクトル返却
+    Processor->>VectorDB: Chroma DB に保存<br/>(永続化)
+    Processor->>Processor: BM25 インデックス再構築<br/>(MeCab)
+    
+    UI->>API: GET /status
+    API-->>UI: {is_indexing: false}
+    UI-->>User: "学習完了" 🎉
 ```
 
 #### 質問応答フロー
 
-```
-User Question (Streamlit / API)
-    ↓
-[1] Multi-Query Generation
-    └─ LLM が質問を3つの表現に変換
-    ↓
-[2] Dual-Path Search
-    ├─ Path A: BM25 (Lexical) → Top-10
-    └─ Path B: Vector (Semantic) → Top-10
-    ↓
-[3] Ensemble Aggregation
-    └─ 加重統合 [0.6×BM25 + 0.4×Vector]
-    ↓
-[4] BGE Reranking
-    ├─ 関連性再評価
-    └─ Top-5 に絞り込み
-    ↓
-[5] LLM Response Generation
-    ├─ Prompt + Context + Question
-    ├─ gpt-4o-mini で回答生成
-    └─ ストリーミング出力
-    ↓
-[6] 出典情報の追記
-    └─ JSON形式で メタデータを返却
-    ↓
-Response to User (Streaming)
+```mermaid
+sequenceDiagram
+    participant User as 👤 User
+    participant UI as 🎨 Streamlit UI
+    participant API as ⚡ FastAPI
+    participant Retriever as 🔎 Hybrid Retriever
+    participant LLM as 🤖 OpenAI LLM
+    participant Reranker as 🧠 BGE Reranker
+    participant Generator as 📝 RAGGenerator
+    
+    User->>UI: 質問を入力
+    UI->>API: POST /ask_stream?question=...
+    
+    API->>LLM: [Multi-Query生成]<br/>質問を3つの表現に変換
+    LLM-->>API: query1, query2, query3
+    
+    rect rgb(200, 220, 250)
+        note over Retriever: [Dual-Path Search]
+        API->>Retriever: BM25検索 (query1,2,3)<br/>→ Top-10
+        API->>Retriever: Vector検索 (query1,2,3)<br/>→ Top-10
+    end
+    
+    rect rgb(220, 250, 220)
+        note over Reranker: [Ensemble + Reranking]
+        Retriever->>Retriever: 加重統合<br/>[0.6×BM25 + 0.4×Vector]
+        Retriever->>Reranker: 結果を再評価
+        Reranker-->>Retriever: スコア付き Top-5
+    end
+    
+    rect rgb(250, 240, 200)
+        note over Generator: [LLM Response Generation]
+        API->>Generator: Context + Question
+        Generator->>LLM: gpt-4o-mini で回答生成
+        LLM-->>Generator: 回答 (ストリーミング)
+    end
+    
+    Generator->>Generator: 出典情報を追記<br/>(SOURCES_JSON)
+    Generator-->>API: 回答 + メタデータ
+    API-->>UI: ストリーミング応答
+    UI-->>User: 回答表示 + 出典表示 ✨
 ```
 
 ---
